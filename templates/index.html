@@ -48,6 +48,9 @@
     .status { color: var(--muted); font-size: 13px; }
     button { border: 0; border-radius: 10px; padding: 9px 13px; font: inherit; font-weight: 700; cursor: pointer; transition: .18s ease; }
     button:hover { transform: translateY(-1px); }
+    button:active { transform: translateY(1px) scale(.98); }
+    button:disabled { cursor: wait; opacity: .82; transform: none; }
+    button.is-success { color: #062019; background: var(--mint); box-shadow: 0 0 0 3px rgba(114,239,194,.13); }
     .primary { color: #062019; background: linear-gradient(135deg, var(--mint), var(--mint-2)); box-shadow: 0 8px 22px rgba(56,201,151,.19); }
     .quiet { color: var(--text); background: rgba(255,255,255,.06); }
     details { margin-top: 16px; border: 1px solid var(--line); border-radius: 15px; background: rgba(13,23,21,.68); }
@@ -57,6 +60,9 @@
     .upload-status { color: var(--muted); font-size: 13px; }
     .error { color: var(--danger); }
     .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid rgba(255,255,255,.25); border-top-color: var(--mint); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+    .toast { position: fixed; left: 50%; bottom: 28px; z-index: 10; display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px); padding: 11px 15px; color: #062019; background: var(--mint); border-radius: 12px; box-shadow: 0 16px 45px rgba(0,0,0,.35); font-weight: 750; opacity: 0; pointer-events: none; transform: translate(-50%, 12px); transition: opacity .2s ease, transform .2s ease; }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .toast.error-toast { color: #2b0907; background: var(--danger); }
     @keyframes spin { to { transform: rotate(360deg); } }
     @media (max-width: 780px) {
       .shell { width: min(100% - 22px, 1240px); padding: 28px 0; }
@@ -83,7 +89,7 @@
           <div class="label"><span class="step">1</span> Fake text</div>
           <span class="meta" id="inputCount">0 characters</span>
         </div>
-        <textarea id="input" autofocus spellcheck="false" placeholder="Paste ShieldFont-obfuscated text here…"></textarea>
+        <textarea id="input" autofocus spellcheck="false" placeholder="The quick brown fox jumps over the lazy dog.&#10;&#10;Paste ShieldFont-obfuscated text here…"></textarea>
         <div class="toolbar">
           <span class="status">Decodes while you type</span>
           <button class="primary" id="decodeButton">Decode text</button>
@@ -95,7 +101,7 @@
           <div class="label"><span class="step">2</span> Recovered text</div>
           <span class="meta" id="outputCount">0 characters</span>
         </div>
-        <textarea id="output" readonly spellcheck="false" placeholder="The real rendered text will appear here…"></textarea>
+        <textarea id="output" readonly spellcheck="false" placeholder="The wise brown fox jumps over the logistic rabbit.&#10;&#10;The real decoded, copyable text will appear here…"></textarea>
         <div class="toolbar">
           <span class="status" id="decodeStatus">Ready · {{ '{:,}'.format(default_words) }} word mappings</span>
           <button class="quiet" id="copyButton">Copy result</button>
@@ -114,6 +120,8 @@
     </details>
   </main>
 
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
   <script>
     const input = document.querySelector('#input');
     const output = document.querySelector('#output');
@@ -122,22 +130,50 @@
     const decodeStatus = document.querySelector('#decodeStatus');
     const fontName = document.querySelector('#fontName');
     const uploadStatus = document.querySelector('#uploadStatus');
+    const decodeButton = document.querySelector('#decodeButton');
+    const copyButton = document.querySelector('#copyButton');
+    const toast = document.querySelector('#toast');
     let fontId = 'default';
     let timer;
     let requestNumber = 0;
+    let toastTimer;
 
     const countLabel = value => `${value.length.toLocaleString()} character${value.length === 1 ? '' : 's'}`;
 
-    async function decode() {
+    function showToast(message, isError = false) {
+      clearTimeout(toastTimer);
+      toast.textContent = message;
+      toast.classList.toggle('error-toast', isError);
+      toast.classList.add('show');
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+    }
+
+    function resetDecodeButton() {
+      decodeButton.disabled = false;
+      decodeButton.classList.remove('is-success');
+      decodeButton.textContent = 'Decode text';
+    }
+
+    async function decode(showButtonFeedback = false) {
       const currentRequest = ++requestNumber;
       inputCount.textContent = countLabel(input.value);
       if (!input.value) {
         output.value = '';
         outputCount.textContent = countLabel('');
         decodeStatus.textContent = 'Ready';
+        if (showButtonFeedback) {
+          decodeButton.textContent = 'Paste text first';
+          showToast('Paste some fake text first', true);
+          setTimeout(resetDecodeButton, 1200);
+        }
         return;
       }
+      decodeStatus.classList.remove('error');
       decodeStatus.innerHTML = '<span class="spinner"></span>Decoding';
+      if (showButtonFeedback) {
+        decodeButton.disabled = true;
+        decodeButton.innerHTML = '<span class="spinner"></span>Decoding';
+      }
       try {
         const response = await fetch('/api/decode', {
           method: 'POST',
@@ -150,9 +186,19 @@
         output.value = data.result;
         outputCount.textContent = countLabel(data.result);
         decodeStatus.textContent = `${data.replacements.toLocaleString()} replacement${data.replacements === 1 ? '' : 's'}`;
+        if (showButtonFeedback) {
+          decodeButton.disabled = false;
+          decodeButton.classList.add('is-success');
+          decodeButton.textContent = 'Decoded ✓';
+          setTimeout(resetDecodeButton, 1200);
+        }
       } catch (error) {
         decodeStatus.textContent = error.message;
         decodeStatus.classList.add('error');
+        if (showButtonFeedback) {
+          resetDecodeButton();
+          showToast(error.message, true);
+        }
       }
     }
 
@@ -160,13 +206,28 @@
       clearTimeout(timer);
       timer = setTimeout(decode, 180);
     });
-    document.querySelector('#decodeButton').addEventListener('click', decode);
-    document.querySelector('#copyButton').addEventListener('click', async event => {
-      if (!output.value) return;
-      await navigator.clipboard.writeText(output.value);
-      const button = event.currentTarget;
-      button.textContent = 'Copied';
-      setTimeout(() => button.textContent = 'Copy result', 1200);
+    decodeButton.addEventListener('click', () => decode(true));
+    copyButton.addEventListener('click', async () => {
+      if (!output.value) {
+        copyButton.textContent = 'Nothing to copy';
+        showToast('Decode some text before copying', true);
+        setTimeout(() => copyButton.textContent = 'Copy result', 1200);
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(output.value);
+        copyButton.classList.add('is-success');
+        copyButton.textContent = 'Copied ✓';
+        showToast('Decoded text copied successfully');
+        setTimeout(() => {
+          copyButton.classList.remove('is-success');
+          copyButton.textContent = 'Copy result';
+        }, 1400);
+      } catch (_error) {
+        copyButton.textContent = 'Copy failed';
+        showToast('Clipboard access was blocked', true);
+        setTimeout(() => copyButton.textContent = 'Copy result', 1400);
+      }
     });
 
     document.querySelector('#uploadButton').addEventListener('click', async () => {
