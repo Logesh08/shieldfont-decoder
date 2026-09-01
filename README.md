@@ -1,13 +1,18 @@
 # ShieldFont Decoder
 
-A small local Python web server that recovers the text visually rendered by
-ShieldFont-style OpenType ligature substitution.
+A Python web application that recovers the text visually rendered by
+ShieldFont-style OpenType ligature substitution and converts it into real,
+copyable Unicode text.
+
+## Live Demo
+
+**[Try ShieldFont Decoder](https://shieldfont-decoder.onrender.com/)**
 
 The supplied `font-ada3.woff2` mapping is pre-generated, so the default decoder
 starts instantly. You can analyze another WOFF2, WOFF, TTF, or OTF file from the
 secondary **Advanced** section in the UI.
 
-## Run
+## Run locally
 
 ```bash
 python -m venv .venv
