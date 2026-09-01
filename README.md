@@ -37,3 +37,13 @@ replacement to preserve the font's word-boundary behavior and also applies
 single-character substitutions such as digit permutations.
 
 Uploaded font mappings are cached in memory for the lifetime of the server.
+
+## About ShieldFont
+
+[ShieldFont](https://shieldfont.org/) is an open-source creative technology that
+uses custom fonts and word substitution to protect written content from
+automated scraping. Its source project is available on
+[GitHub](https://github.com/isaqueseneda/shieldfont).
+
+ShieldFont Decoder is an independent research and compatibility tool. It is not
+affiliated with or endorsed by the ShieldFont project.
